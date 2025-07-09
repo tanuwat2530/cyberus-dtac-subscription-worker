@@ -52,7 +52,7 @@ func main() {
 func backgroundWorker(rdb *redis.Client, db *gorm.DB) {
 
 	var ctx = context.Background()
-	var WAIT_INTERVAL = (21 * time.Second)
+	var WAIT_INTERVAL = (17 * time.Second)
 	var cursor uint64 = 0
 	var matchPattern = "dtac-subscription-callback-api:*" // Pattern to match keys
 	var count = int64(100)                                // Limit to 100 keys per scan
@@ -77,6 +77,7 @@ func backgroundWorker(rdb *redis.Client, db *gorm.DB) {
 				//fmt.Println("Send Key to Worker : ", keys[i]) // Print only the first key
 				// Example: Get the value of the key (assuming it's a string)
 				valJson, err := rdb.Get(ctx, keys[i]).Result()
+				fmt.Println(valJson)
 				if err != nil {
 					log.Fatal("Error getting value : ", err)
 				} else {
@@ -181,7 +182,9 @@ func threadWorker(id int, wg *sync.WaitGroup, jsonString string, rdb *redis.Clie
 	var subscriptionData SubscriptionData
 	errSubscriptionData := json.Unmarshal([]byte(jsonString), &subscriptionData)
 	if errSubscriptionData != nil {
+
 		fmt.Println("JSON Marshal error : ", errSubscriptionData)
+		return nil
 		//return fmt.Errorf("JSON DECODE ERROR : " + errSubscriptionData.Error())
 	}
 
@@ -221,6 +224,7 @@ func threadWorker(id int, wg *sync.WaitGroup, jsonString string, rdb *redis.Clie
 	errPartnerData := json.Unmarshal([]byte(jsonString), &partnerData)
 	if errPartnerData != nil {
 		fmt.Println("partnerData : ", errPartnerData)
+		return nil
 		//return fmt.Errorf("partnerData : " + errPartnerData.Error())
 	}
 
@@ -282,12 +286,14 @@ func threadWorker(id int, wg *sync.WaitGroup, jsonString string, rdb *redis.Clie
 		resp, err := client.Get(paramTargetURL)
 		if err != nil {
 			fmt.Println("failed to make GET request to ", resp, err)
+			return nil
 		}
 		defer resp.Body.Close() // Ensure the response body is closed after reading
 
 		// Check the HTTP status code
 		if resp.StatusCode != http.StatusOK {
 			fmt.Println("received non-OK HTTP status for ", resp, resp.Status)
+			return nil
 		}
 	}
 
@@ -329,6 +335,7 @@ func threadWorker(id int, wg *sync.WaitGroup, jsonString string, rdb *redis.Clie
 	if errInsertDB := db.Create(&logEntry).Error; errInsertDB != nil {
 		fmt.Println("ERROR INSERT : " + errInsertDB.Error())
 		//return fmt.Errorf(errInsertDB.Error())
+		return nil
 	}
 
 	redis_set_key := "dtac-transaction-log-worker:" + subscriptionData.Media + ":" + subscriptionData.RefId
@@ -338,6 +345,7 @@ func threadWorker(id int, wg *sync.WaitGroup, jsonString string, rdb *redis.Clie
 	if errSetRedis != nil {
 		fmt.Println("Redis SET error:", errSetRedis)
 		//return fmt.Errorf("REDIS SET ERROR : " + errSetRedis.Error())
+		return nil
 	}
 
 	redis_del_key := "dtac-subscription-callback-api:" + subscriptionData.Media + ":" + subscriptionData.RefId
